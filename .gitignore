@@ -1,0 +1,12 @@
+#Virtual Environment
+venv/
+
+#Python cache
+pycache/
+*.pyc
+
+#Credentials file
+.env
+
+#Large binaries - should not be in the repository
+chrome-win64/

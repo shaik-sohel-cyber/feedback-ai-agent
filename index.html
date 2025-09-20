@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRIET Feedback Automator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-4xl bg-gray-800 rounded-lg shadow-2xl p-8 space-y-6">
+        <div class="flex justify-between items-center">
+            <div class="text-left">
+                <h1 class="text-3xl font-bold text-cyan-400">GRIET Feedback Automation</h1>
+                <p class="text-gray-400 mt-2">Enter your GRIET credentials to start the process.</p>
+            </div>
+            <a href="/logout" class="bg-gray-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                Logout
+            </a>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label for="griet-username" class="block text-sm font-medium text-gray-300">GRIET Username</label>
+                <input type="text" id="griet-username" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-cyan-500 focus:border-cyan-500" placeholder="e.g., 23241a12c0">
+            </div>
+            <div>
+                <label for="griet-password" class="block text-sm font-medium text-gray-300">GRIET Password</label>
+                <input type="password" id="griet-password" class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-cyan-500 focus:border-cyan-500" placeholder="Enter your GRIET portal password">
+            </div>
+        </div>
+        <div class="flex justify-center pt-2">
+            <button id="runButton" class="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2">
+                <span id="buttonText">Run Automation</span>
+                <div id="spinner" class="hidden animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            </button>
+        </div>
+        <div class="bg-black rounded-lg p-4 h-80 overflow-y-auto border border-gray-700">
+            <pre id="logOutput" class="text-sm text-gray-300 whitespace-pre-wrap">Welcome! The automation log will appear here when you run the script...</pre>
+        </div>
+        <div id="statusFooter" class="text-center text-gray-500 text-sm pt-4 border-t border-gray-700">
+            Status: Idle
+        </div>
+    </div>
+    <script>
+        const runButton = document.getElementById('runButton');
+        const buttonText = document.getElementById('buttonText');
+        const spinner = document.getElementById('spinner');
+        const logOutput = document.getElementById('logOutput');
+        const statusFooter = document.getElementById('statusFooter');
+        const usernameInput = document.getElementById('griet-username');
+        const passwordInput = document.getElementById('griet-password');
+
+        runButton.addEventListener('click', async () => {
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+
+            if (!username || !password) {
+                logOutput.textContent = '❌ Error: Please enter both GRIET username and password.';
+                statusFooter.textContent = 'Status: Failed';
+                statusFooter.className = 'text-center text-red-400 text-sm pt-4 border-t border-gray-700';
+                return;
+            }
+
+            // --- Start Automation ---
+            runButton.disabled = true;
+            buttonText.textContent = 'Running...';
+            spinner.classList.remove('hidden');
+            logOutput.textContent = '🚀 Initializing automation...\n';
+            statusFooter.textContent = 'Status: Running...';
+            statusFooter.className = 'text-center text-yellow-400 text-sm pt-4 border-t border-gray-700';
+
+            try {
+                const response = await fetch('/run-automation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status ${response.status}`);
+                }
+
+                // Stream the response from the server
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                logOutput.textContent = ''; // Clear previous logs
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    logOutput.textContent += chunk;
+                    logOutput.scrollTop = logOutput.scrollHeight; // Auto-scroll to bottom
+                }
+
+                // Check final status from the logs
+                if (logOutput.textContent.includes('❌') || logOutput.textContent.includes('Error')) {
+                     statusFooter.textContent = 'Status: Failed';
+                     statusFooter.className = 'text-center text-red-400 text-sm pt-4 border-t border-gray-700';
+                } else {
+                     logOutput.textContent += '\n\n✅ Automation Completed Successfully!';
+                     statusFooter.textContent = 'Status: Success';
+                     statusFooter.className = 'text-center text-green-400 text-sm pt-4 border-t border-gray-700';
+                }
+
+            } catch (error) {
+                logOutput.textContent += `\n❌ A critical error occurred while communicating with the server: ${error.message}`;
+                statusFooter.textContent = `Status: Failed`;
+                statusFooter.className = 'text-center text-red-400 text-sm pt-4 border-t border-gray-700';
+            } finally {
+                // --- Reset UI ---
+                runButton.disabled = false;
+                buttonText.textContent = 'Run Automation';
+                spinner.classList.add('hidden');
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        });
+    </script>
+</body>
+</html>
+

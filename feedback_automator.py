@@ -6,8 +6,6 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 
-# Note: webdriver-manager is no longer needed as the Dockerfile handles the driver.
-
 def run_feedback_automation(username, password):
     """
     Runs the GRIET feedback automation in a Docker environment where Chrome is pre-installed.
@@ -19,6 +17,14 @@ def run_feedback_automation(username, password):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("window-size=1920,1080")
+    
+    # --- NEW ARGUMENTS TO FIX THE CRASH ---
+    # Tells Chrome not to try using a GPU, which doesn't exist on the server.
+    chrome_options.add_argument("--disable-gpu")
+    # Tells Chrome to use a temporary folder for its user data, fixing the "directory in use" error.
+    chrome_options.add_argument("--user-data-dir=/tmp/user-data")
+    chrome_options.add_argument("--remote-debugging-port=9222")
+
 
     # --- Configuration ---
     CONFIG = {
@@ -38,10 +44,8 @@ def run_feedback_automation(username, password):
         "RATINGS": { "default": 4 }
     }
 
-    # Initialize the driver. Selenium will automatically find the chromedriver
-    # installed in the Docker container.
     with webdriver.Chrome(options=chrome_options) as driver:
-        wait = WebDriverWait(driver, 25) # Increased wait time for server environment
+        wait = WebDriverWait(driver, 25)
         
         try:
             yield "Initializing automation...\n"

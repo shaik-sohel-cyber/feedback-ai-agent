@@ -6,4 +6,4 @@ __pycache__/
 .env
 
 # Large binaries (already added)
-chrome-win64/
+chrome-win64/d

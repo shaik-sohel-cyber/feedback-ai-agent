@@ -5,7 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
 from webdriver_manager.chrome import ChromeDriverManager
 
 def run_feedback_automation(username, password):
@@ -26,30 +26,24 @@ def run_feedback_automation(username, password):
         "WAIT_SHORT": 1,
     }
 
-    # Browser Options
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")  # Invisible mode
+    options.add_argument("--headless=new") 
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
+    # --- FIX 1: Add User Agent to look like a real human ---
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     driver = None
     try:
         # --- SMART DRIVER SELECTION ---
-        # 1. Try to find the driver installed by Docker (Linux/Render)
         system_driver_path = "/usr/bin/chromedriver"
-        
         if os.path.exists(system_driver_path):
-            # We are on the server: Use the installed system driver
-            # This avoids version conflicts because it matches the installed Chromium
             service = Service(executable_path=system_driver_path)
         else:
-            # We are on Windows/Local: Download the driver automatically
-            # This fixes the "Unable to obtain driver" error on your PC
             service = Service(ChromeDriverManager().install())
-        # -------------------------------
-
+        
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, CONFIG["WAIT_LONG"])
 
@@ -60,7 +54,7 @@ def run_feedback_automation(username, password):
         wait.until(EC.presence_of_element_located((By.ID, CONFIG["SELECTORS"]["username_field_id"]))).send_keys(username)
         driver.find_element(By.ID, CONFIG["SELECTORS"]["password_field_id"]).send_keys(password)
         driver.find_element(By.ID, CONFIG["SELECTORS"]["login_button_id"]).click()
-        yield "PROGRESS:20:Login submitted. Accessing dashboard..."
+        yield "PROGRESS:20:Login submitted..."
 
         # --- Click FEEDBACK link ---
         feedback_link = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, CONFIG["SELECTORS"]["feedback_link_text"])))
@@ -74,7 +68,7 @@ def run_feedback_automation(username, password):
         dropdown_elem = wait.until(EC.presence_of_element_located((By.ID, CONFIG["SELECTORS"]["term_dropdown_id"])))
         try:
             driver.execute_script("arguments[0].click();", dropdown_elem)
-        except Exception:
+        except:
             pass
         time.sleep(0.6)
 
@@ -105,7 +99,7 @@ def run_feedback_automation(username, password):
             candidates = driver.find_elements(By.XPATH, "//input[@type='text']")
 
         total_boxes = len(candidates)
-        yield f"PROGRESS:50:Found {total_boxes} rating boxes. Filling now..."
+        yield f"PROGRESS:50:Found {total_boxes} rating boxes. Filling..."
 
         filled = 0
         for idx, el in enumerate(candidates, start=1):
@@ -118,35 +112,56 @@ def run_feedback_automation(username, password):
                 )
                 filled += 1
                 current_progress = 50 + int((filled / total_boxes) * 40)
-                yield f"PROGRESS:{current_progress}:Filled box {filled}/{total_boxes}"
+                if idx % 5 == 0: # Reduce spam updates
+                    yield f"PROGRESS:{current_progress}:Filled box {filled}/{total_boxes}"
             except:
                 pass
 
         yield "PROGRESS:90:Submitting form..."
-        time.sleep(0.1)
+        time.sleep(1.0) # Give the page a moment to settle
 
-        # --- Submit ---
+        # --- Submit Strategy (Robust) ---
         if CONFIG["SUBMIT_FORM"]:
+            submission_success = False
+            
+            # Attempt 1: Direct Click
             try:
                 submit_btn = driver.find_element(By.ID, "btnfbsave")
-                driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", submit_btn)
+                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", submit_btn)
+                time.sleep(0.5)
+                submit_btn.click()
+                
+                # Wait for alert
+                WebDriverWait(driver, 5).until(EC.alert_is_present()).accept()
+                submission_success = True
+                yield "PROGRESS:95:Submitted via Button Click..."
+            except Exception as e:
+                # Attempt 2: JavaScript Click
+                yield "PROGRESS:92:Button click failed, trying Force JS..."
                 try:
+                    driver.execute_script("document.getElementById('btnfbsave').click();")
                     WebDriverWait(driver, 5).until(EC.alert_is_present()).accept()
+                    submission_success = True
+                    yield "PROGRESS:95:Submitted via JS Force..."
                 except:
-                    pass
-            except:
-                # Fallback
-                driver.execute_script("if(typeof _onSaveClick === 'function'){ _onSaveClick(); }")
-                try:
-                    WebDriverWait(driver, 5).until(EC.alert_is_present()).accept()
-                except:
-                    pass
+                    # Attempt 3: Page Function Call
+                    try:
+                        driver.execute_script("if(typeof _onSaveClick === 'function'){ _onSaveClick(); }")
+                        WebDriverWait(driver, 5).until(EC.alert_is_present()).accept()
+                        submission_success = True
+                        yield "PROGRESS:95:Submitted via Internal Function..."
+                    except:
+                        pass
+
+            if not submission_success:
+                 yield "ERROR:Could not submit. Popup never appeared."
+                 return
 
         yield "PROGRESS:100:Automation Complete!"
         time.sleep(2.0)
 
     except Exception as e:
-        yield f"ERROR:{str(e)}"
+        yield f"ERROR:Critical Error: {str(e)}"
     finally:
         if driver:
             driver.quit()

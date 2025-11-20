@@ -1,7 +1,8 @@
-# Use an official Python runtime
-FROM python:3.10-slim-buster
+# Use 'bookworm' (Debian 12) instead of 'buster' (Debian 10)
+FROM python:3.10-slim-bookworm
 
 # Install Chrome and dependencies
+# In Bookworm, we can install chromium and the driver directly
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -10,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     chromium-driver \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables
+# Set environment variables so Selenium knows where to look
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 ENV PYTHONUNBUFFERED=1

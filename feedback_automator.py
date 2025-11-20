@@ -1,8 +1,9 @@
 import time
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# We removed ChromeDriverManager to stop the version conflict
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
@@ -26,18 +27,19 @@ def run_feedback_automation(username, password):
     }
 
     options = webdriver.ChromeOptions()
-    # --- CRITICAL FOR DEPLOYMENT & UX ---
-    options.add_argument("--headless=new") # Run invisible (no popup window)
+    options.add_argument("--headless=new") 
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    # ------------------------------------
 
     driver = None
     try:
-        # Auto-install matching chrome version
-        service = Service(ChromeDriverManager().install())
+        # --- CRITICAL FIX ---
+        # Instead of downloading a driver, we use the one installed by Docker.
+        # In the Dockerfile, we installed chromium-driver, which lives at /usr/bin/chromedriver
+        service = Service(executable_path="/usr/bin/chromedriver")
+        
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, CONFIG["WAIT_LONG"])
 

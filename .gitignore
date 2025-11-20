@@ -1,9 +1,0 @@
-# Python
-__pycache__/
-.venv/
-
-# Environment variables
-.env
-
-# Large binaries (already added)
-chrome-win64/d

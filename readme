@@ -1,0 +1,19 @@
+# GRIET Feedback Auto Filler (Client-Side Version)
+
+This version runs 100% inside the user's browser.
+No backend required. No Selenium. No Python.
+
+## Features
+- Fills all text boxes with “4”
+- Clicks submit automatically
+- Accepts confirm popup
+- Clean loading bar UI
+- Works for all students
+- Deployable on Vercel instantly
+
+## How to Use
+1. Deploy the project to Vercel
+2. Open the website
+3. Enter GRIET username + password
+4. Click **Fill Feedback**
+5. Automation completes inside browser

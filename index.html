@@ -2,39 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GRIET Auto Feedback Filler</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRIET Automator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Inter', sans-serif; } </style>
 </head>
-<body>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-lg bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-cyan-400 tracking-tight">Feedback Automator</h1>
+            <p class="text-gray-400 text-sm mt-2">Automated filling system. No browser popup.</p>
+        </div>
 
-<div class="container">
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Username</label>
+                <input type="text" id="griet-username" class="w-full bg-gray-700/50 border border-gray-600 rounded p-3 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" placeholder="Roll Number">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Password</label>
+                <input type="password" id="griet-password" class="w-full bg-gray-700/50 border border-gray-600 rounded p-3 text-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition" placeholder="Portal Password">
+            </div>
+        </div>
 
-    <h2>GRIET Feedback Auto Filler</h2>
+        <div id="progress-container" class="hidden mb-6">
+            <div class="flex justify-between text-xs text-cyan-300 mb-1">
+                <span id="status-text">Initializing...</span>
+                <span id="percentage-text">0%</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div id="progress-bar" class="bg-cyan-500 h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+            </div>
+        </div>
 
-    <div class="input-group">
-        <label>GRIET Username</label>
-        <input id="username" type="text" placeholder="Enter Hallticket No">
+        <div id="error-box" class="hidden bg-red-500/20 border border-red-500 text-red-200 p-3 rounded text-sm mb-4"></div>
+
+        <button id="runButton" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg transition shadow-lg transform active:scale-95">
+            Start Automation
+        </button>
+
+        <a href="/logout" class="block text-center text-gray-600 text-xs mt-6 hover:text-gray-400">Logout</a>
     </div>
 
-    <div class="input-group">
-        <label>GRIET Password</label>
-        <input id="password" type="password" placeholder="Enter Password">
-    </div>
+    <script>
+        const runButton = document.getElementById('runButton');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const statusText = document.getElementById('status-text');
+        const percentageText = document.getElementById('percentage-text');
+        const errorBox = document.getElementById('error-box');
 
-    <button id="runBtn">
-        <span id="btnText">Fill Feedback</span>
-        <span id="spinner" class="hidden">⏳</span>
-    </button>
+        runButton.addEventListener('click', async () => {
+            const username = document.getElementById('griet-username').value;
+            const password = document.getElementById('griet-password').value;
 
-    <!-- Loading bar -->
-    <div id="progressBar" class="loading hidden">
-        <div class="loading-inner"></div>
-    </div>
+            if (!username || !password) {
+                alert("Please enter credentials");
+                return;
+            }
 
-    <div id="status" class="status"></div>
+            // Reset UI
+            errorBox.classList.add('hidden');
+            runButton.disabled = true;
+            runButton.classList.add('opacity-50', 'cursor-not-allowed');
+            runButton.innerText = "Running...";
+            progressContainer.classList.remove('hidden');
+            updateProgress(5, "Connecting to server...");
 
-</div>
+            try {
+                const response = await fetch('/run-automation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
 
-<script src="script.js"></script>
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    
+                    lines.forEach(line => {
+                        if (line.startsWith('PROGRESS:')) {
+                            // Format is PROGRESS:PERCENT:MESSAGE
+                            const parts = line.split(':');
+                            if (parts.length >= 3) {
+                                const pct = parts[1];
+                                const msg = parts.slice(2).join(':');
+                                updateProgress(pct, msg);
+                            }
+                        } else if (line.startsWith('ERROR:')) {
+                            showError(line.replace('ERROR:', ''));
+                        }
+                    });
+                }
+                
+                updateProgress(100, "Done!");
+                runButton.innerText = "Completed";
+                runButton.classList.replace('bg-cyan-600', 'bg-green-600');
+                
+                setTimeout(() => {
+                    runButton.disabled = false;
+                    runButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                    runButton.classList.replace('bg-green-600', 'bg-cyan-600');
+                    runButton.innerText = "Start Automation";
+                    progressContainer.classList.add('hidden');
+                }, 3000);
+
+            } catch (err) {
+                showError("Server connection failed.");
+                runButton.disabled = false;
+                runButton.classList.remove('opacity-50');
+                runButton.innerText = "Start Automation";
+            }
+        });
+
+        function updateProgress(percent, message) {
+            progressBar.style.width = percent + '%';
+            percentageText.innerText = percent + '%';
+            statusText.innerText = message;
+        }
+
+        function showError(msg) {
+            errorBox.innerText = msg;
+            errorBox.classList.remove('hidden');
+            progressContainer.classList.add('hidden');
+        }
+    </script>
 </body>
 </html>

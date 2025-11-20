@@ -3,10 +3,10 @@ import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-# We removed ChromeDriverManager to stop the version conflict
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException
+from webdriver_manager.chrome import ChromeDriverManager
 
 def run_feedback_automation(username, password):
     CONFIG = {
@@ -26,8 +26,9 @@ def run_feedback_automation(username, password):
         "WAIT_SHORT": 1,
     }
 
+    # Browser Options
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new") 
+    options.add_argument("--headless=new")  # Invisible mode
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
@@ -35,11 +36,20 @@ def run_feedback_automation(username, password):
 
     driver = None
     try:
-        # --- CRITICAL FIX ---
-        # Instead of downloading a driver, we use the one installed by Docker.
-        # In the Dockerfile, we installed chromium-driver, which lives at /usr/bin/chromedriver
-        service = Service(executable_path="/usr/bin/chromedriver")
+        # --- SMART DRIVER SELECTION ---
+        # 1. Try to find the driver installed by Docker (Linux/Render)
+        system_driver_path = "/usr/bin/chromedriver"
         
+        if os.path.exists(system_driver_path):
+            # We are on the server: Use the installed system driver
+            # This avoids version conflicts because it matches the installed Chromium
+            service = Service(executable_path=system_driver_path)
+        else:
+            # We are on Windows/Local: Download the driver automatically
+            # This fixes the "Unable to obtain driver" error on your PC
+            service = Service(ChromeDriverManager().install())
+        # -------------------------------
+
         driver = webdriver.Chrome(service=service, options=options)
         wait = WebDriverWait(driver, CONFIG["WAIT_LONG"])
 
@@ -107,7 +117,6 @@ def run_feedback_automation(username, password):
                     el, fill_val
                 )
                 filled += 1
-                # Calculate progress between 50% and 90%
                 current_progress = 50 + int((filled / total_boxes) * 40)
                 yield f"PROGRESS:{current_progress}:Filled box {filled}/{total_boxes}"
             except:
@@ -121,8 +130,6 @@ def run_feedback_automation(username, password):
             try:
                 submit_btn = driver.find_element(By.ID, "btnfbsave")
                 driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", submit_btn)
-                
-                # Handle Alert
                 try:
                     WebDriverWait(driver, 5).until(EC.alert_is_present()).accept()
                 except:

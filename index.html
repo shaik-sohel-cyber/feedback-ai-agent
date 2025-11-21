@@ -71,6 +71,8 @@
             progressContainer.classList.remove('hidden');
             updateProgress(5, "Connecting to server...");
 
+            let finalStatus = "unknown"; // Track what really happened
+
             try {
                 const response = await fetch('/run-automation', {
                     method: 'POST',
@@ -90,33 +92,40 @@
                     
                     lines.forEach(line => {
                         if (line.startsWith('PROGRESS:')) {
-                            // Format is PROGRESS:PERCENT:MESSAGE
                             const parts = line.split(':');
                             if (parts.length >= 3) {
                                 const pct = parts[1];
                                 const msg = parts.slice(2).join(':');
                                 updateProgress(pct, msg);
+                                if (pct == "100") finalStatus = "success";
                             }
                         } else if (line.startsWith('ERROR:')) {
+                            finalStatus = "error";
                             showError(line.replace('ERROR:', ''));
                         }
                     });
                 }
                 
-                updateProgress(100, "Done!");
-                runButton.innerText = "Completed";
-                runButton.classList.replace('bg-cyan-600', 'bg-green-600');
-                
-                setTimeout(() => {
-                    runButton.disabled = false;
-                    runButton.classList.remove('opacity-50', 'cursor-not-allowed');
-                    runButton.classList.replace('bg-green-600', 'bg-cyan-600');
-                    runButton.innerText = "Start Automation";
-                    progressContainer.classList.add('hidden');
-                }, 3000);
+                // --- THE FIX: Only show "Done" if Python actually said 100% ---
+                if (finalStatus === "success") {
+                    runButton.innerText = "Completed";
+                    runButton.classList.replace('bg-cyan-600', 'bg-green-600');
+                    setTimeout(() => {
+                        runButton.disabled = false;
+                        runButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                        runButton.classList.replace('bg-green-600', 'bg-cyan-600');
+                        runButton.innerText = "Start Automation";
+                        progressContainer.classList.add('hidden');
+                    }, 3000);
+                } else if (finalStatus === "error") {
+                    // Already handled by showError loop above
+                } else {
+                    // If stream ended but we never got 100% or an explicit Error
+                    showError("CRITICAL: Server Connection Lost (Timeout). The automation took too long.");
+                }
 
             } catch (err) {
-                showError("Server connection failed.");
+                showError("Network Error: Could not reach server.");
                 runButton.disabled = false;
                 runButton.classList.remove('opacity-50');
                 runButton.innerText = "Start Automation";
@@ -133,6 +142,11 @@
             errorBox.innerText = msg;
             errorBox.classList.remove('hidden');
             progressContainer.classList.add('hidden');
+            
+            // Reset button so you can try again
+            runButton.disabled = false;
+            runButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            runButton.innerText = "Start Automation";
         }
     </script>
 </body>

@@ -18,4 +18,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 5000
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:app"]
+
+# --- THE FIX IS HERE: Added --timeout 600 ---
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "--timeout", "600", "app:app"]
